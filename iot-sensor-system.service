@@ -1,0 +1,24 @@
+[Unit]
+Description=Sistema de Monitoreo IoT con Sensores
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/iot_sensors
+ExecStart=/usr/bin/python3 /home/pi/iot_sensors/iot_sensor_system.py --interval 3600
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Variables de entorno si son necesarias
+Environment="PYTHONUNBUFFERED=1"
+
+# Límites de recursos (opcional)
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
