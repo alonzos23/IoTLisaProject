@@ -299,8 +299,8 @@ python3 iot_sensor_system.py --interval 10
 
 ---
 
-**Versión:** 2.0  
-**Fecha:** Octubre 2025  
+**Versión:** 1.0  
+**Fecha:** Enero 2026
 **Institución:** ULEAM  
 **Estado:** ✅ Listo para Producción
 
