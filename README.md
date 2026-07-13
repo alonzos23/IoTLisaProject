@@ -17,8 +17,6 @@ Sistema mejorado para monitoreo de sensores ambientales con envío de datos via 
 
 | Sensor | Canal | Medición |
 |--------|-------|----------|
-| Potenciómetro 1 | A0 | Voltaje (0-3.3V) |
-| Potenciómetro 2 | A1 | Voltaje (0-3.3V) |
 | Sensor pH | A2 | pH (0-14) |
 | Oxígeno Disuelto | A3 | mg/L |
 | DS18B20 | 1-Wire | Temperatura (°C) |
@@ -185,8 +183,6 @@ PASSWORD = 'Mqtt-Uleam2025$'    # Contraseña
   "temperatura": 25.5,
   "ph": 7.2,
   "oxigeno_disuelto": 8.5,
-  "potenciometro_1": 1.65,
-  "potenciometro_2": 2.10,
   "timestamp": 1735603200,
   "dateTime": "30/10/2025 14:30:00",
   "sensor_status": {
@@ -321,6 +317,16 @@ sudo journalctl -u iot-sensor-system -p err
 
 ---
 
-**Versión:** 2.0  
-**Fecha:** Octubre 2025  
-**Autor:** Sistema Mejorado IoT ULEAM
+**Versión:** 1.0  
+**Fecha:** Enero 2026
+**Autoras:** Alonzo Merizaldes Stefany Michelle - Cedeño Rivera Joseline Malena
+**Tutor:** Ing. Willian Zamora, PhD.
+**Guia Tutor:** Ing. Mike Machuca Avalos, Mg.
+
+
+**Versión:** 2.0 
+**Fecha:** Por definir 
+**Autor/Colaborador:** Victor Delgado
+**Tutor:** Ing. Mike Machica Avalos, Mg**
+**Guia tutor:** Ing. Willian Zamora, PhD**
+**Mejoras Implementadas:** Sensores de Salinidad y Turbidez 
