@@ -7,6 +7,7 @@
 SERVICE_NAME="iot-sensor-system"
 SERVICE_FILE="iot-sensor-system.service"
 PYTHON_SCRIPT="iot_sensor_system.py"
+EC_HELPER_SCRIPT="rs485_ec_sensor.py"
 INSTALL_DIR="/home/pi/iot_sensors"
 LOG_FILE="/var/log/iot_sensor_system.log"
 
@@ -63,6 +64,16 @@ install_service() {
         chown pi:pi "$INSTALL_DIR/$PYTHON_SCRIPT"
     else
         print_error "No se encuentra el archivo $PYTHON_SCRIPT"
+        exit 1
+    fi
+
+    if [ -f "$EC_HELPER_SCRIPT" ]; then
+        print_info "Copiando helper RS485 del sensor EC..."
+        cp "$EC_HELPER_SCRIPT" "$INSTALL_DIR/"
+        chmod +x "$INSTALL_DIR/$EC_HELPER_SCRIPT"
+        chown pi:pi "$INSTALL_DIR/$EC_HELPER_SCRIPT"
+    else
+        print_error "No se encuentra el archivo $EC_HELPER_SCRIPT"
         exit 1
     fi
     
