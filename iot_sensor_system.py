@@ -21,7 +21,8 @@ from paho.mqtt.packettypes import PacketTypes
 from paho.mqtt.properties import Properties
 
 from DFRobot_RaspberryPi_Expansion_Board import DFRobot_Expansion_Board_IIC as Board
-from rs485_ec_sensor import auto_detect_port, create_instrument, read_measurements
+from rs485_ec_sensor import auto_detect_port, create_instrument, read_measurements as read_ec_measurements
+from rs485_turbidity_sensor import read_measurements as read_turbidity_measurements
 
 
 BROKER = '10.150.253.2'
@@ -42,6 +43,10 @@ MAX_RETRIES = 3
 EC_SLAVE_ADDRESS = 1
 EC_BAUDRATE = 4800
 EC_TIMEOUT = 1.0
+
+TURBIDITY_SLAVE_ADDRESS = 1
+TURBIDITY_BAUDRATE = 4800
+TURBIDITY_TIMEOUT = 1.0
 
 
 def get_log_file_path() -> str:
@@ -132,6 +137,8 @@ class MQTTPublisher:
             'ec_temperature_c': sensor_data.get('ec_temperature_c'),
             'salinity_ppm': sensor_data.get('salinity_ppm'),
             'tds_ppm': sensor_data.get('tds_ppm'),
+            'turbidity_ntu': sensor_data.get('turbidity_ntu'),
+            'turbidity_temperature_c': sensor_data.get('turbidity_temperature_c'),
             'timestamp': calendar.timegm(time.gmtime()),
             'dateTime': now.strftime('%d/%m/%Y %H:%M:%S'),
             'sensor_status': sensor_data.get('sensor_status', {}),
@@ -160,10 +167,17 @@ class MQTTPublisher:
 class SensorManager:
     """Gestor de sensores del sistema."""
 
-    def __init__(self, board: Board, ec_port: Optional[str] = None):
+    def __init__(
+        self,
+        board: Board,
+        ec_port: Optional[str] = None,
+        turbidity_port: Optional[str] = None,
+    ):
         self.board = board
         self.ec_port = ec_port
         self.ec_instrument = None
+        self.turbidity_port = turbidity_port
+        self.turbidity_instrument = None
         self.ds18b20_device = None
         self.sensor_status = {
             'board': False,
@@ -173,6 +187,7 @@ class SensorManager:
             'potentiometer_1': False,
             'potentiometer_2': False,
             'ec_sensor': False,
+            'turbidity_sensor': False,
         }
 
     def initialize_board(self) -> bool:
@@ -221,7 +236,7 @@ class SensorManager:
         try:
             port = self.ec_port or auto_detect_port()
             instrument = create_instrument(port, EC_SLAVE_ADDRESS, EC_BAUDRATE, EC_TIMEOUT)
-            read_measurements(instrument)
+            read_ec_measurements(instrument)
             self.ec_instrument = instrument
             self.ec_port = port
             self.sensor_status['ec_sensor'] = True
@@ -231,6 +246,27 @@ class SensorManager:
             logger.warning(f'Sensor EC RS485 no disponible: {e}')
             self.ec_instrument = None
             self.sensor_status['ec_sensor'] = False
+            return False
+
+    def initialize_turbidity_sensor(self) -> bool:
+        try:
+            port = self.turbidity_port or auto_detect_port()
+            instrument = create_instrument(
+                port,
+                TURBIDITY_SLAVE_ADDRESS,
+                TURBIDITY_BAUDRATE,
+                TURBIDITY_TIMEOUT,
+            )
+            read_turbidity_measurements(instrument)
+            self.turbidity_instrument = instrument
+            self.turbidity_port = port
+            self.sensor_status['turbidity_sensor'] = True
+            logger.info(f'Sensor de turbidez RS485 listo en {port}')
+            return True
+        except Exception as e:
+            logger.warning(f'Sensor de turbidez RS485 no disponible: {e}')
+            self.turbidity_instrument = None
+            self.sensor_status['turbidity_sensor'] = False
             return False
 
     def read_temperature(self) -> Optional[float]:
@@ -314,7 +350,7 @@ class SensorManager:
             return sensor_data
 
         try:
-            data = read_measurements(self.ec_instrument)
+            data = read_ec_measurements(self.ec_instrument)
             sensor_data['ec_us_cm'] = data['ec_us_cm']
             sensor_data['ec_temperature_c'] = data['temperature_c']
             sensor_data['salinity_ppm'] = data['salinity_ppm']
@@ -323,6 +359,27 @@ class SensorManager:
         except Exception as e:
             logger.error(f'Error al leer sensor EC RS485: {e}')
             self.sensor_status['ec_sensor'] = False
+
+        return sensor_data
+
+    def read_turbidity_sensor(self) -> Dict[str, Optional[float]]:
+        sensor_data = {
+            'turbidity_ntu': None,
+            'turbidity_temperature_c': None,
+        }
+
+        if not self.turbidity_instrument:
+            self.sensor_status['turbidity_sensor'] = False
+            return sensor_data
+
+        try:
+            data = read_turbidity_measurements(self.turbidity_instrument)
+            sensor_data['turbidity_ntu'] = data['turbidity_ntu']
+            sensor_data['turbidity_temperature_c'] = data['temperature_c']
+            self.sensor_status['turbidity_sensor'] = True
+        except Exception as e:
+            logger.error(f'Error al leer sensor de turbidez RS485: {e}')
+            self.sensor_status['turbidity_sensor'] = False
 
         return sensor_data
 
@@ -337,6 +394,8 @@ class SensorManager:
             'ec_temperature_c': None,
             'salinity_ppm': None,
             'tds_ppm': None,
+            'turbidity_ntu': None,
+            'turbidity_temperature_c': None,
             'sensor_status': self.sensor_status.copy(),
         }
 
@@ -368,6 +427,7 @@ class SensorManager:
             sensor_data['temperatura'] = temperature
 
         sensor_data.update(self.read_ec_sensor())
+        sensor_data.update(self.read_turbidity_sensor())
         sensor_data['sensor_status'] = self.sensor_status.copy()
         return sensor_data
 
@@ -412,10 +472,23 @@ class SensorManager:
         else:
             logger.warning('Sensor EC RS485: Error de lectura')
 
+        if sensor_data['turbidity_ntu'] is not None:
+            logger.info(
+                'Sensor de turbidez RS485: '
+                f"Turbidez={sensor_data['turbidity_ntu']:.1f} NTU | "
+                f"Temp={sensor_data['turbidity_temperature_c']:.1f} C"
+            )
+        else:
+            logger.warning('Sensor de turbidez RS485: Error de lectura')
+
         logger.info('=' * 60)
 
 
-def main(sample_interval: int = DEFAULT_SAMPLE_INTERVAL, ec_port: Optional[str] = None):
+def main(
+    sample_interval: int = DEFAULT_SAMPLE_INTERVAL,
+    ec_port: Optional[str] = None,
+    turbidity_port: Optional[str] = None,
+):
     logger.info('Iniciando sistema de monitoreo IoT')
     logger.info(f'Intervalo de muestreo: {sample_interval} segundos')
 
@@ -425,13 +498,14 @@ def main(sample_interval: int = DEFAULT_SAMPLE_INTERVAL, ec_port: Optional[str] 
         logger.error(f'Error al crear objeto Board: {e}')
         sys.exit(1)
 
-    sensor_manager = SensorManager(board, ec_port=ec_port)
+    sensor_manager = SensorManager(board, ec_port=ec_port, turbidity_port=turbidity_port)
     if not sensor_manager.initialize_board():
         logger.error('No se pudo inicializar la placa. Terminando programa.')
         sys.exit(1)
 
     sensor_manager.detect_ds18b20()
     sensor_manager.initialize_ec_sensor()
+    sensor_manager.initialize_turbidity_sensor()
 
     mqtt_client = MQTTPublisher()
     try:
@@ -480,10 +554,18 @@ if __name__ == '__main__':
         '--ec-port',
         help='Puerto serie del sensor EC RS485, por ejemplo /dev/ttyUSB0',
     )
+    parser.add_argument(
+        '--turbidity-port',
+        help='Puerto serie del sensor de turbidez RS485, por ejemplo /dev/ttyUSB1',
+    )
 
     args = parser.parse_args()
     if args.interval < 1:
         logger.error('El intervalo debe ser mayor o igual a 1 segundo')
         sys.exit(1)
 
-    main(sample_interval=args.interval, ec_port=args.ec_port)
+    main(
+        sample_interval=args.interval,
+        ec_port=args.ec_port,
+        turbidity_port=args.turbidity_port,
+    )

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnostico del sistema IoT y del sensor RS485 SEN0707."""
+"""Diagnostico del sistema IoT y de los sensores RS485 SEN0707 y SEN0710."""
 
 import glob
 import subprocess
@@ -7,13 +7,26 @@ import sys
 import time
 
 from DFRobot_RaspberryPi_Expansion_Board import DFRobot_Expansion_Board_IIC as Board
-from rs485_ec_sensor import auto_detect_port, create_instrument, read_device_info, read_measurements
+from rs485_ec_sensor import (
+    auto_detect_port,
+    create_instrument,
+    read_device_info as read_ec_device_info,
+    read_measurements as read_ec_measurements,
+)
+from rs485_turbidity_sensor import (
+    read_device_info as read_turbidity_device_info,
+    read_measurements as read_turbidity_measurements,
+)
 
 
 VREF = 3.3
 EC_SLAVE_ADDRESS = 1
 EC_BAUDRATE = 4800
 EC_TIMEOUT = 1.0
+
+TURBIDITY_SLAVE_ADDRESS = 1
+TURBIDITY_BAUDRATE = 4800
+TURBIDITY_TIMEOUT = 1.0
 
 
 def print_header(title):
@@ -138,8 +151,8 @@ def test_ec_sensor():
     try:
         port = auto_detect_port()
         instrument = create_instrument(port, EC_SLAVE_ADDRESS, EC_BAUDRATE, EC_TIMEOUT)
-        info = read_device_info(instrument)
-        data = read_measurements(instrument)
+        info = read_ec_device_info(instrument)
+        data = read_ec_measurements(instrument)
         print_status('Puerto RS485', True, port)
         print_status('Configuracion RS485', True, f"slave={info['slave_address']}, baudrate={info['baudrate']}")
         print_status(
@@ -154,8 +167,31 @@ def test_ec_sensor():
         print_status('Sensor EC RS485', False, f'Error: {e}')
 
 
+def test_turbidity_sensor():
+    print_header('8. PRUEBA DE SENSOR DE TURBIDEZ RS485 SEN0710')
+    try:
+        port = auto_detect_port()
+        instrument = create_instrument(
+            port,
+            TURBIDITY_SLAVE_ADDRESS,
+            TURBIDITY_BAUDRATE,
+            TURBIDITY_TIMEOUT,
+        )
+        info = read_turbidity_device_info(instrument)
+        data = read_turbidity_measurements(instrument)
+        print_status('Puerto RS485', True, port)
+        print_status('Configuracion RS485', True, f"slave={info['slave_address']}, baudrate={info['baudrate']}")
+        print_status(
+            'Lectura SEN0710',
+            True,
+            f"Turbidez={data['turbidity_ntu']:.1f} NTU, Temp={data['temperature_c']:.1f}C",
+        )
+    except Exception as e:
+        print_status('Sensor de turbidez RS485', False, f'Error: {e}')
+
+
 def test_mqtt_connection():
-    print_header('8. PRUEBA DE CONEXION MQTT')
+    print_header('9. PRUEBA DE CONEXION MQTT')
     try:
         import socket
         from paho.mqtt.client import Client as MQTTClient
@@ -202,6 +238,7 @@ def main():
     test_do_sensor(board)
     test_ds18b20()
     test_ec_sensor()
+    test_turbidity_sensor()
     test_mqtt_connection()
     print('\nDiagnostico completado')
 
