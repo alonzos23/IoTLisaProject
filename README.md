@@ -1,157 +1,62 @@
-# Sistema de Monitoreo IoT con Sensores - Raspberry Pi
+# IoTLisaProject
 
-Sistema de monitoreo para Raspberry Pi con envio de datos por MQTT.
+Sistema de monitoreo IoT para Raspberry Pi con lectura de sensores y envio de datos por MQTT hacia Node-RED.
 
-## Sensores integrados
+## Sensores incluidos
 
-| Sensor | Interfaz | Medicion |
-|--------|----------|----------|
-| Potenciometro 1 | A0 | Voltaje |
-| Potenciometro 2 | A1 | Voltaje |
-| Sensor pH | A2 | pH |
-| Oxigeno disuelto | A3 | mg/L |
-| DS18B20 | 1-Wire | Temperatura |
-| DFRobot SEN0707 | RS485 Modbus RTU | EC, salinidad, TDS, temperatura |
+- sensores analogicos ya existentes del proyecto
+- `DS18B20`
+- `SEN0707` por `RS485 Modbus RTU`
+- `SEN0710` por `RS485 Modbus RTU`
 
-## Archivos principales
+## Documentacion principal
 
-- `iot_sensor_system.py`: proceso principal y publicacion MQTT
-- `rs485_ec_sensor.py`: lector y prueba del sensor `SEN0707`
-- `diagnostic.py`: diagnostico de I2C, 1-Wire, RS485 y MQTT
+- `MANUAL_USUARIO.md`: instalacion, uso diario, MQTT, servicio y Node-RED
+- `MANUAL_DESARROLLADOR.md`: arquitectura del proyecto y guia para mantener o extender el codigo
+- `MANUAL_SENSORES_RS485.md`: uso, limpieza, cuidado y buenas practicas para `SEN0707` y `SEN0710`
+
+## Archivos clave
+
+- `iot_sensor_system.py`: sistema principal
+- `diagnostic.py`: diagnostico general
 - `iot_service_manager.sh`: instalacion y control del servicio
-- `iot-sensor-system.service`: unidad `systemd`
+- `rs485_ec_sensor.py`: prueba directa del sensor `SEN0707`
+- `rs485_turbidity_sensor.py`: prueba directa del sensor `SEN0710`
+- `rs485_modbus_config.py`: lectura y cambio de direccion/baudrate Modbus
 
-## Requisitos
+## Configuracion RS485 recomendada
 
-### Hardware
+- `SEN0707` -> `slave 1`
+- `SEN0710` -> `slave 2`
+- ambos a `4800 baud`
 
-- Raspberry Pi
-- DFRobot Expansion Board `0x10`
-- Sensor `DS18B20`
-- Sensor de pH en `A2`
-- Sensor de oxigeno disuelto en `A3`
-- Sensor `SEN0707` con alimentacion `10-30V`
-- Adaptador `USB-RS485`
+## Inicio rapido
 
-### Software
-
-```bash
-sudo apt-get update
-sudo apt-get install -y python3 python3-pip
-pip3 install paho-mqtt minimalmodbus pyserial DFRobot-RaspberryPi-Expansion-Board
-```
-
-Habilitar en la Raspberry Pi:
-
-- `I2C`
-- `1-Wire`
-
-## Uso del sensor EC RS485
-
-El `SEN0707` usa estos parametros por defecto:
-
-- protocolo: `Modbus RTU`
-- direccion: `1`
-- baudrate: `4800`
-- formato serie: `8N1`
-
-Cableado del sensor:
-
-- `Brown`: `VCC 10-30V`
-- `Black`: `GND`
-- `Yellow`: `485-A`
-- `Blue`: `485-B`
-
-Prueba directa del sensor:
-
-```bash
-python3 rs485_ec_sensor.py --port /dev/ttyUSB0 --device-info --count 1
-python3 rs485_ec_sensor.py --port /dev/ttyUSB0 --json --count 5 --interval 2
-```
-
-## Ejecutar manualmente el sistema completo
-
-```bash
-python3 iot_sensor_system.py --interval 60 --ec-port /dev/ttyUSB0
-```
-
-Si no pasas `--ec-port`, el sistema intenta detectar automaticamente un puerto `USB` o `ACM`.
-
-## Instalar como servicio
-
-```bash
-chmod +x iot_service_manager.sh iot_sensor_system.py rs485_ec_sensor.py diagnostic.py
-sudo ./iot_service_manager.sh install
-sudo ./iot_service_manager.sh start
-sudo ./iot_service_manager.sh status
-```
-
-## Mensaje MQTT
-
-Ejemplo de payload:
-
-```json
-{
-  "Sensor": "ULEAMCENTRAL02",
-  "temperatura": 25.4,
-  "ph": 7.12,
-  "oxigeno_disuelto": 8.3,
-  "potenciometro_1": 1.23,
-  "potenciometro_2": 2.34,
-  "ec_us_cm": 1216,
-  "ec_temperature_c": 25.2,
-  "salinity_ppm": 608,
-  "tds_ppm": 668,
-  "timestamp": 1735603200,
-  "dateTime": "30/10/2025 14:30:00",
-  "sensor_status": {
-    "board": true,
-    "temperature": true,
-    "ph": true,
-    "dissolved_oxygen": true,
-    "potentiometer_1": true,
-    "potentiometer_2": true,
-    "ec_sensor": true
-  }
-}
-```
-
-## Diagnostico
+### Diagnostico
 
 ```bash
 python3 diagnostic.py
 ```
 
-El diagnostico prueba:
-
-- bus `I2C`
-- placa `DFRobot`
-- entradas `A0-A3`
-- `pH`
-- oxigeno disuelto
-- `DS18B20`
-- sensor `SEN0707`
-- conectividad `MQTT`
-
-## Problemas comunes
-
-### El sensor EC responde pero marca `0`
-
-- prueba con el sensor realmente sumergido
-- elimina burbujas en la punta
-- usa una muestra conductiva, no solo humedad en la tapa
-- confirma que `A` y `B` no esten invertidos
-
-### No hay comunicacion RS485
-
-- revisa `/dev/ttyUSB0` o `/dev/ttyACM0`
-- confirma `slave=1`
-- confirma `baudrate=4800`
-- verifica alimentacion estable de `12V`
-
-### El servicio no inicia
+### Sistema principal
 
 ```bash
-sudo journalctl -u iot-sensor-system -n 100
-sudo systemctl status iot-sensor-system
+python3 iot_sensor_system.py --interval 60 --ec-port /dev/ttyUSB0 --turbidity-port /dev/ttyUSB0
 ```
+
+### Servicio
+
+```bash
+sudo ./iot_service_manager.sh install
+sudo ./iot_service_manager.sh start
+```
+
+## Node-RED
+
+El sistema publica en el topic:
+
+```text
+iot_uleam/uleam
+```
+
+Para detalles de dashboard y configuracion MQTT, revisar `MANUAL_USUARIO.md`.
