@@ -24,7 +24,7 @@ EC_SLAVE_ADDRESS = 1
 EC_BAUDRATE = 4800
 EC_TIMEOUT = 1.0
 
-TURBIDITY_SLAVE_ADDRESS = 1
+TURBIDITY_SLAVE_ADDRESS = 2
 TURBIDITY_BAUDRATE = 4800
 TURBIDITY_TIMEOUT = 1.0
 
@@ -153,7 +153,7 @@ def test_ec_sensor():
         instrument = create_instrument(port, EC_SLAVE_ADDRESS, EC_BAUDRATE, EC_TIMEOUT)
         info = read_ec_device_info(instrument)
         data = read_ec_measurements(instrument)
-        print_status('Puerto RS485', True, port)
+        print_status('Puerto RS485', True, f'{port} (esperado slave {EC_SLAVE_ADDRESS})')
         print_status('Configuracion RS485', True, f"slave={info['slave_address']}, baudrate={info['baudrate']}")
         print_status(
             'Lectura SEN0707',
@@ -179,7 +179,7 @@ def test_turbidity_sensor():
         )
         info = read_turbidity_device_info(instrument)
         data = read_turbidity_measurements(instrument)
-        print_status('Puerto RS485', True, port)
+        print_status('Puerto RS485', True, f'{port} (esperado slave {TURBIDITY_SLAVE_ADDRESS})')
         print_status('Configuracion RS485', True, f"slave={info['slave_address']}, baudrate={info['baudrate']}")
         print_status(
             'Lectura SEN0710',
