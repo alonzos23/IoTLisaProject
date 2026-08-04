@@ -5,10 +5,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/iot_sensors
-ExecStart=/usr/bin/python3 /home/pi/iot_sensors/iot_sensor_system.py --interval 3600
+User=lisa
+Group=lisa
+WorkingDirectory=/home/lisa/DFRobot_RaspberryPi_Expansion_Board/IoTLisaProject
+ExecStart=/usr/bin/python3 /home/lisa/DFRobot_RaspberryPi_Expansion_Board/IoTLisaProject/iot_sensor_system.py --interval 60
 Restart=always
 RestartSec=10
 StandardOutput=journal
