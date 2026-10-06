@@ -1,14 +1,14 @@
 [Unit]
 Description=Sistema de Monitoreo IoT con Sensores
-After=network-online.target
-Wants=network-online.target
+After=network-online.target dev-ttyUSB0.device
+Wants=network-online.target dev-ttyUSB0.device
 
 [Service]
 Type=simple
 User=lisa
 Group=lisa
 WorkingDirectory=/home/lisa/DFRobot_RaspberryPi_Expansion_Board/IoTLisaProject
-ExecStart=/usr/bin/python3 /home/lisa/DFRobot_RaspberryPi_Expansion_Board/IoTLisaProject/iot_sensor_system.py --interval 60
+ExecStart=/usr/bin/python3 /home/lisa/DFRobot_RaspberryPi_Expansion_Board/IoTLisaProject/iot_sensor_system.py --interval 150 --ec-port /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0 --turbidity-port /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0
 Restart=always
 RestartSec=10
 StandardOutput=journal

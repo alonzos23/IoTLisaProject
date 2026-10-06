@@ -16,7 +16,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from paho.mqtt.client import Client as MQTTClient
+from paho.mqtt.client import CallbackAPIVersion, Client as MQTTClient
 from paho.mqtt.packettypes import PacketTypes
 from paho.mqtt.properties import Properties
 
@@ -33,7 +33,7 @@ USE_MQTT_V5 = False
 CLIENT_ID = f'python-mqtt-{random.randint(0, 1000)}'
 
 DEVICE_SERIAL = 'ULEAMCENTRAL02'
-LOCATION_SLUG = 'uleam'
+LOCATION_SLUG = 'lisa'
 TOPIC_DATA = f'iot_uleam/{LOCATION_SLUG}'
 
 VREF = 3.3
@@ -47,6 +47,8 @@ EC_TIMEOUT = 1.0
 TURBIDITY_SLAVE_ADDRESS = 2
 TURBIDITY_BAUDRATE = 4800
 TURBIDITY_TIMEOUT = 1.0
+
+RS485_WAIT_TIMEOUT = 25
 
 
 def get_log_file_path() -> str:
@@ -81,11 +83,44 @@ class SensorError(Exception):
     """Excepcion personalizada para errores de sensores."""
 
 
+def wait_for_rs485_port(
+    preferred_port: Optional[str] = None,
+    timeout: float = RS485_WAIT_TIMEOUT,
+) -> Optional[str]:
+    """Espera a que el adaptador USB-RS485 este disponible.
+
+    Devuelve el puerto detectado o None si no aparece en el tiempo indicado.
+    """
+    target = preferred_port or '/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0'
+    fallback_glob = '/dev/ttyUSB*'
+    deadline = time.time() + timeout
+    logger.info(f'Esperando adaptador USB-RS485 (max {timeout:.0f} segundos)...')
+
+    while time.time() < deadline:
+        if os.path.exists(target):
+            logger.info(f'Adaptador USB-RS485 disponible: {target}')
+            return target
+
+        candidates = sorted(glob.glob(fallback_glob))
+        if candidates:
+            logger.info(f'Adaptador USB-RS485 disponible: {candidates[0]}')
+            return candidates[0]
+
+        time.sleep(0.5)
+
+    logger.warning(
+        f'Adaptador USB-RS485 no disponible tras {timeout:.0f} segundos. '
+        'Los sensores RS485 se reintentaran en cada muestreo.'
+    )
+    return None
+
+
 class MQTTPublisher:
     """Cliente MQTT con reconexion automatica."""
 
     def __init__(self):
         self.client = MQTTClient(
+            callback_api_version=CallbackAPIVersion.VERSION2,
             client_id=CLIENT_ID,
             protocol=5 if USE_MQTT_V5 else 4,
         )
@@ -96,22 +131,22 @@ class MQTTPublisher:
         self.client.reconnect_delay_set(min_delay=1, max_delay=30)
         self.connected = False
 
-    def on_connect(self, client, userdata, flags, rc, properties=None):
-        if rc == 0:
+    def on_connect(self, client, userdata, connect_flags, reason_code, properties=None):
+        if reason_code == 0:
             logger.info(f"Conectado exitosamente al broker MQTT como '{CLIENT_ID}'")
             self.connected = True
         else:
-            logger.error(f'Error al conectar MQTT: {rc}')
+            logger.error(f'Error al conectar MQTT: {reason_code}')
             self.connected = False
 
-    def on_disconnect(self, client, userdata, rc, properties=None):
+    def on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties=None):
         self.connected = False
-        if rc != 0:
+        if reason_code != 0:
             logger.warning('Desconexion inesperada de MQTT. Reconectando...')
         else:
             logger.info('Desconectado del broker MQTT')
 
-    def on_publish(self, client, userdata, mid):
+    def on_publish(self, client, userdata, mid, reason_code=None, properties=None):
         logger.debug(f'Datos enviados al servidor MQTT (ID: {mid})')
 
     def connect(self):
@@ -346,8 +381,11 @@ class SensorManager:
         }
 
         if not self.ec_instrument:
-            self.sensor_status['ec_sensor'] = False
-            return sensor_data
+            self.initialize_ec_sensor()
+
+            if not self.ec_instrument:
+                self.sensor_status['ec_sensor'] = False
+                return sensor_data
 
         try:
             data = read_ec_measurements(self.ec_instrument)
@@ -369,8 +407,11 @@ class SensorManager:
         }
 
         if not self.turbidity_instrument:
-            self.sensor_status['turbidity_sensor'] = False
-            return sensor_data
+            self.initialize_turbidity_sensor()
+
+            if not self.turbidity_instrument:
+                self.sensor_status['turbidity_sensor'] = False
+                return sensor_data
 
         try:
             data = read_turbidity_measurements(self.turbidity_instrument)
@@ -504,6 +545,14 @@ def main(
         sys.exit(1)
 
     sensor_manager.detect_ds18b20()
+
+    rs485_port = wait_for_rs485_port(ec_port or turbidity_port)
+    if rs485_port:
+        ec_port = ec_port or rs485_port
+        turbidity_port = turbidity_port or rs485_port
+        sensor_manager.ec_port = rs485_port
+        sensor_manager.turbidity_port = rs485_port
+
     sensor_manager.initialize_ec_sensor()
     sensor_manager.initialize_turbidity_sensor()
 
